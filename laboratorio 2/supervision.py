@@ -1,35 +1,3 @@
-
-"""
-# Contratos + Seguimientos con JSON (db.json)
-
- Estructura esperada:
- {
-   "contracts": [
-     {
-       "number": "C-1001",
-       "contractor": "Ana Torres",
-       "object": "Mantenimiento",
-       "start": "01/02/2026",
-       "end": "01/05/2026",
-       "value": 3500000,
-       "supervisor": "Carlos Mejía",
-       "status": "ACTIVO",
-       "email": "ana@example.com",
-       "trackings": [
-         {
-           "id": 1,
-           "date": "15/02/2026",
-           "desc": "Revisión inicial",
-           "progress": 10,
-           "obs": "Sin novedades"
-         }
-       ]
-     }
-   ]
- }
-
- Export "conveniente" -> contracts.csv y trackings.csv
-"""
 import os
 import json
 import csv
@@ -40,286 +8,305 @@ CONTRACTS_CSV = "contracts.csv"
 TRACKINGS_CSV = "trackings.csv"
 
 
+# =========================
 # Persistencia
+# =========================
 
 def _ensure_db():
-    """
-    Si db.json no existe, debe crearlo con la estructura:
-    {"contracts": []}
-    """
-    pass
+    if not os.path.exists(DB_FILE):
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump({"contracts": []}, f, indent=4)
 
 
 def _load_db():
-    """
-    Debe cargar y devolver el contenido de db.json.
+    try:
+        _ensure_db()
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-    Reglas:
-    - Si el archivo no existe, debe crearlo primero
-    - Si ocurre algún error, debe devolver {"contracts": []}
-    - Si la estructura no es válida, debe devolver {"contracts": []}
-    """
-    pass
+        if "contracts" not in data or not isinstance(data["contracts"], list):
+            return {"contracts": []}
+
+        return data
+    except:
+        return {"contracts": []}
 
 
 def _save_db(data):
-    """
-    Debe guardar en db.json el contenido recibido en data.
-    El archivo debe quedar legible (con indentación).
-    """
-    pass
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
 
 
+# =========================
 # Validaciones auxiliares
+# =========================
 
 def _parse_date_ddmmyyyy(s):
-    """
-    Debe convertir una fecha en formato dd/mm/aaaa a tipo date.
-
-    Ejemplo:
-    "15/02/2026" -> date(2026, 2, 15)
-
-    Si la fecha no es válida, debe lanzar excepción.
-    """
-    pass
+    return datetime.strptime(s, "%d/%m/%Y").date()
 
 
 def _valid_email(e):
-    """
-    Debe validar de manera básica si un correo electrónico es válido.
+    if not isinstance(e, str):
+        return False
+    if " " in e:
+        return False
+    if e.count("@") != 1:
+        return False
 
-    Condiciones mínimas:
-    - debe ser string
-    - no debe tener espacios
-    - debe tener un solo @
-    - debe tener texto antes y después del @
-    - la parte de la derecha debe contener un punto
+    left, right = e.split("@")
+    if not left or not right:
+        return False
+    if "." not in right:
+        return False
 
-    Retorna:
-    - True
-    - False
-    """
-    pass
+    return True
 
 
 def _valid_status(s):
-    """
-    Debe validar el estado del contrato.
-
-    Estados válidos:
-    - ACTIVO
-    - SUSPENDIDO
-    - TERMINADO
-
-    Retorna:
-    - True
-    - False
-    """
-    pass
+    return s in ["ACTIVO", "SUSPENDIDO", "TERMINADO"]
 
 
 def _to_positive_float(x):
-    """
-    Debe intentar convertir x a float positivo.
-
-    Retorna:
-    - valor float si es válido y mayor a cero
-    - None si no es válido
-    """
-    pass
+    try:
+        val = float(x)
+        if val > 0:
+            return val
+    except:
+        pass
+    return None
 
 
 def _find_contract(data, number):
-    """
-    Debe buscar un contrato por número dentro de data["contracts"].
-
-    Retorna:
-    - el diccionario del contrato si existe
-    - None si no existe
-    """
-    pass
+    for c in data["contracts"]:
+        if c["number"] == number:
+            return c
+    return None
 
 
-# API principal de contratos
+# =========================
+# API contratos
+# =========================
 
 def registerContract(number, contractor, obj, start, end, value, supervisor, status, email):
-    """
-    Debe registrar un contrato nuevo.
+    if not all([number, contractor, obj, start, end, supervisor, status, email]):
+        return "invalid data"
 
-    Validaciones obligatorias:
-    - todos los campos obligatorios deben existir
-    - el número de contrato debe ser único
-    - el estado debe ser válido
-    - el correo debe ser válido
-    - el valor debe ser numérico positivo
-    - la fecha debe tener formato válido
-    - la fecha de inicio debe ser <= a la fecha de terminación
+    data = _load_db()
 
-    El contrato debe guardarse con una lista vacía de trackings:
-    "trackings": []
+    if _find_contract(data, number):
+        return "number already exists"
 
-    Retorna:
-    - "ok"
-    - "invalid data"
-    - "invalid date format"
-    - "invalid date range"
-    - "number already exists"
-    """
-    pass
+    if not _valid_status(status):
+        return "invalid data"
+
+    if not _valid_email(email):
+        return "invalid data"
+
+    value = _to_positive_float(value)
+    if value is None:
+        return "invalid data"
+
+    try:
+        start_d = _parse_date_ddmmyyyy(start)
+        end_d = _parse_date_ddmmyyyy(end)
+    except:
+        return "invalid date format"
+
+    if start_d > end_d:
+        return "invalid date range"
+
+    contract = {
+        "number": number,
+        "contractor": contractor,
+        "object": obj,
+        "start": start,
+        "end": end,
+        "value": value,
+        "supervisor": supervisor,
+        "status": status,
+        "email": email,
+        "trackings": []
+    }
+
+    data["contracts"].append(contract)
+    _save_db(data)
+
+    return "ok"
 
 
 def listContracts():
-    """
-    Debe devolver la lista de contratos ordenada alfabéticamente
-    por contractor.
+    data = _load_db()
 
-    Importante:
-    - Para el listado general NO es necesario devolver los trackings.
-    - Puede devolver una lista de diccionarios "liviana".
+    result = []
+    for c in data["contracts"]:
+        result.append({
+            "number": c["number"],
+            "contractor": c["contractor"],
+            "object": c["object"],
+            "start": c["start"],
+            "end": c["end"],
+            "value": c["value"],
+            "supervisor": c["supervisor"],
+            "status": c["status"],
+            "email": c["email"]
+        })
 
-    Retorna:
-    - lista de contratos
-    """
-    pass
+    return sorted(result, key=lambda x: x["contractor"])
 
 
 def searchContract(number):
-    """
-    Debe buscar un contrato por número.
-
-    Retorna:
-    - el contrato completo si existe (incluyendo trackings)
-    - None si no existe
-    """
-    pass
+    data = _load_db()
+    return _find_contract(data, number)
 
 
-# API de seguimientos
+# =========================
+# API seguimientos
+# =========================
 
 def addTracking(number, date_str, desc, progress, obs):
-    """
-    Debe agregar un seguiminto a un contrato existente.
+    if not number or not desc:
+        return "invalid data"
 
-    Validaciones:
-    - number no vacío
-    - date_str válido
-    - desc no vacío
-    - progress entero entre 0 y 100
-    - el contrato debe existir
+    try:
+        _parse_date_ddmmyyyy(date_str)
+    except:
+        return "invalid date format"
 
-    El seguimiento debe guardarse con estructura:
-    {
-      "id": 
-      "date": 
-      "desc": 
-      "progress": 
-      "obs": 
+    try:
+        progress = int(progress)
+        if progress < 0 or progress > 100:
+            return "invalid data"
+    except:
+        return "invalid data"
+
+    data = _load_db()
+    contract = _find_contract(data, number)
+
+    if not contract:
+        return "contract not found"
+
+    new_id = len(contract["trackings"]) + 1
+
+    tracking = {
+        "id": new_id,
+        "date": date_str,
+        "desc": desc,
+        "progress": progress,
+        "obs": obs
     }
 
-    El id puede ser incremental por contrato.
+    contract["trackings"].append(tracking)
+    _save_db(data)
 
-    Retorna:
-    - "ok"
-    - "invalid data"
-    - "invalid date format"
-    - "contract not found"
-    """
-    pass
+    return "ok"
 
 
 def listTrackings(number):
-    """
-    Debe listar los seguimientos de un contrato.
+    if not number:
+        return "invalid data"
 
-    Validaciones:
-    - number no vacío
-    - el contrato debe existir
+    data = _load_db()
+    contract = _find_contract(data, number)
 
-    Retorna:
-    - lista de seguimientos
-    - "invalid data"
-    - "contract not found"
-    """
-    pass
+    if not contract:
+        return "contract not found"
+
+    return contract["trackings"]
 
 
 def avgProgress(number):
-    """
-    Debe calcular el promedio de avance de un contrato.
+    if not number:
+        return "invalid data"
 
-    Validaciones:
-    - number no vacío
-    - el contrato debe existir
+    data = _load_db()
+    contract = _find_contract(data, number)
 
-    Si no tiene seguimientos, el promedio debe ser 0.0
+    if not contract:
+        return "contract not found"
 
-    Retorna:
-    - {"number": ..., "count": ..., "avg_progress": ...}
-    - "invalid data"
-    - "contract not found"
-    """
-    pass
+    trackings = contract["trackings"]
+
+    if not trackings:
+        return {"number": number, "count": 0, "avg_progress": 0.0}
+
+    total = sum(t["progress"] for t in trackings)
+    avg = total / len(trackings)
+
+    return {"number": number, "count": len(trackings), "avg_progress": avg}
 
 
+# =========================
 # Estadísticas
+# =========================
 
 def stats():
-    """
-    Debe calcular las estadísticas generales del sistema:
+    data = _load_db()
+    contracts = data["contracts"]
 
-    - total_contracts
-    - total_by_status
-    - total_value
-    - avg_value
-    - max_contract
-    - min_contract
-    - contracts_soon_to_end
+    total_contracts = len(contracts)
 
-    Donde:
-    - total_by_status cuenta contratos por estado
-    - total_value es la suma total de valores
-    - avg_value es el promedio del valor de los contratos
-    - max_contract es el contrato con mayor valor
-    - min_contract es el contrato con menor valor
-    - contracts_soon_to_end son contratos que vencen en los próximos 30 días
+    total_by_status = {"ACTIVO": 0, "SUSPENDIDO": 0, "TERMINADO": 0}
+    total_value = 0
 
-    Retorna:
-    - diccionario con las estadísticas
-    """
-    pass
+    for c in contracts:
+        total_by_status[c["status"]] += 1
+        total_value += c["value"]
+
+    avg_value = total_value / total_contracts if total_contracts > 0 else 0
+
+    max_contract = max(contracts, key=lambda x: x["value"], default=None)
+    min_contract = min(contracts, key=lambda x: x["value"], default=None)
+
+    today = date.today()
+    soon_limit = today + timedelta(days=30)
+
+    contracts_soon_to_end = []
+    for c in contracts:
+        try:
+            end_date = _parse_date_ddmmyyyy(c["end"])
+            if today <= end_date <= soon_limit:
+                contracts_soon_to_end.append(c)
+        except:
+            pass
+
+    return {
+        "total_contracts": total_contracts,
+        "total_by_status": total_by_status,
+        "total_value": total_value,
+        "avg_value": avg_value,
+        "max_contract": max_contract,
+        "min_contract": min_contract,
+        "contracts_soon_to_end": contracts_soon_to_end
+    }
 
 
-# Exportacón a CSV
+# =========================
+# Exportación CSV
+# =========================
 
 def exportCsv():
-    """
-    Debe exportar la información a dos archivos CSV:
+    data = _load_db()
 
-    1. contracts.csv
-       Columnas sugeridas:
-       - number
-       - contractor
-       - object
-       - start
-       - end
-       - value
-       - supervisor
-       - status
-       - email
+    # contracts.csv
+    with open(CONTRACTS_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["number", "contractor", "object", "start", "end", "value", "supervisor", "status", "email"])
 
-    2. trackings.csv
-       Columnas sugeridas:
-       - number
-       - id
-       - date
-       - desc
-       - progress
-       - obs
+        for c in data["contracts"]:
+            writer.writerow([
+                c["number"], c["contractor"], c["object"],
+                c["start"], c["end"], c["value"],
+                c["supervisor"], c["status"], c["email"]
+            ])
 
-    Debe recorrer los contratos y luego, para cada contrato,
-    exportar también sus seguimientos.
+    # trackings.csv
+    with open(TRACKINGS_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["number", "id", "date", "desc", "progress", "obs"])
 
-    Esta función no retorna nada.
-    """
-    pass
-
+        for c in data["contracts"]:
+            for t in c["trackings"]:
+                writer.writerow([
+                    c["number"], t["id"], t["date"],
+                    t["desc"], t["progress"], t["obs"]
+                ])

@@ -1,21 +1,12 @@
-
-"""
-# Autenticación simple con JSON (users.json)
-# Estructura esperada:
-# {
-#   "users": [
-#     {"user":"admin1","password":"adm","role":"admin","session":false}
-#   ]
-# }
-"""
 import os
 import json
 
 USERS_FILE = "users.json"
 
 
-
-# Funciones auxiliares de persistencia
+# =========================
+# FUNCIONES AUXILIARES
+# =========================
 
 def _ensure_users_file():
     """
@@ -23,117 +14,128 @@ def _ensure_users_file():
     con la estructura inicial:
     {"users": []}
     """
-    pass
+    if not os.path.exists(USERS_FILE):
+        with open(USERS_FILE, "w", encoding="utf-8") as archivo:
+            json.dump({"users": []}, archivo, indent=4)
 
 
 def _load():
     """
     Debe cargar y devolver el contenido del archivo users.json.
-
-    Reglas:
-    - Si el archivo no existe, debe crearlo primero.
-    - Si ocurre algún error leyendo el archivo,
-      debe devolver {"users": []}
-    - Si la estructura no es válida, debe devolver {"users": []}
     """
-    pass
+    _ensure_users_file()
+
+    try:
+        with open(USERS_FILE, "r", encoding="utf-8") as archivo:
+            data = json.load(archivo)
+
+        if not isinstance(data, dict) or "users" not in data:
+            return {"users": []}
+
+        if not isinstance(data["users"], list):
+            return {"users": []}
+
+        return data
+
+    except Exception:
+        return {"users": []}
 
 
 def _save(data):
     """
     Debe guardar en users.json la información recibida en data.
-    El archivo debe guardarse con indentación para que sea legible.
     """
-    pass
+    try:
+        with open(USERS_FILE, "w", encoding="utf-8") as archivo:
+            json.dump(data, archivo, indent=4)
+    except Exception:
+        print("Error al guardar el archivo")
 
 
-
-# Validaciones
+# =========================
+# VALIDACIONES
+# =========================
 
 def _valid_role(role):
     """
     Debe validar si el rol es permitido.
-
-    Roles válidos:
-    - admin
-    - supervisor
-    - viewer
-
-    Retorna:
-    - True  si el rol es válido
-    - False en caso contrario
     """
-    pass
+    if role == "admin" or role == "supervisor" or role == "viewer":
+        return True
+    else:
+        return False
 
 
-# API principal de autenticación
+# =========================
+# API PRINCIPAL
+# =========================
 
 def findUser(user):
-    """
-    Debe buscar un usuario por nombre.
+    data = _load()
 
-    Parámetro:
-    - user: nombre del usuario
+    for u in data["users"]:
+        if u["user"] == user:
+            return u
 
-    Retorna:
-    - el diccionario del usuario si existe
-    - None si no existe
-    """
-    pass
+    return None
 
 
 def registerUser(user, password, role):
-    """
-    Debe registrar un nuevo usuario en users.json.
 
-    Validaciones:
-    - user no vacío
-    - password no vacío
-    - role válido
-    - no debe existir ya un usuario con el mismo nombre
+    if user == "" or password == "" or role == "":
+        return "invalid data"
 
-    Retorna:
-    - "ok"
-    - "invalid data"
-    - "user exists"
-    """
-    pass
+    if not _valid_role(role):
+        return "invalid data"
+
+    data = _load()
+
+    for u in data["users"]:
+        if u["user"] == user:
+            return "user exists"
+
+    nuevo = {
+        "user": user,
+        "password": password,
+        "role": role,
+        "session": False
+    }
+
+    data["users"].append(nuevo)
+    _save(data)
+
+    return "ok"
 
 
 def openCloseSession(user, password, flag):
-    """
-    Debe abrir o cerrar sesión para un usuario.
 
-    Parámetros:
-    - user: nombre del usuario
-    - password: contraseña
-    - flag:
-        True  -> abrir sesión
-        False -> cerrar sesión
+    if user == "" or password == "":
+        return "invalid data"
 
-    Validaciones:
-    - user y password no vacíos
-    - el usuario debe existir
-    - la contraseña debe coincidir
+    data = _load()
 
-    Retorna:
-    - "ok"
-    - "invalid data"
-    - "wrong credentials"
-    """
-    pass
+    for u in data["users"]:
+        if u["user"] == user:
+
+            if u["password"] != password:
+                return "wrong credentials"
+
+            u["session"] = flag
+            _save(data)
+            return "ok"
+
+    return "wrong credentials"
 
 
 def hasRole(user, allowed_roles):
-    """
-    Debe verificar si el usuario tiene uno de los roles permitidos.
 
-    Parámetros:
-    - user: nombre del usuario
-    - allowed_roles: tupla o lista de roles permitidos
+    data = _load()
 
-    Retorna:
-    - True  si el usuario existe y su rol está permitido
-    - False en caso contrario
-    """
-    pass
+    for u in data["users"]:
+        if u["user"] == user:
+            if u["role"] in allowed_roles:
+                return True
+            else:
+                return False
+
+    return False
